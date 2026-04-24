@@ -14,10 +14,23 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.0.1";
+const VERSION = "0.0.2";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
-type Command = "remove" | "replace" | "batch" | "health" | "help" | "version";
+type Command =
+  | "remove"
+  | "replace"
+  | "batch"
+  | "mask"
+  | "smart-crop"
+  | "shadow"
+  | "sticker"
+  | "outline"
+  | "studio-shot"
+  | "compare"
+  | "health"
+  | "help"
+  | "version";
 
 interface GlobalOpts {
   token: string;
@@ -36,6 +49,13 @@ COMMANDS
   remove <input>          Remove background from one image → transparent PNG/WebP
   replace <input>         Remove background + composite onto a new background
   batch <file1> <file2>…  Process up to 10 images in one call
+  mask <input>            Return just the alpha mask as a B/W PNG
+  smart-crop <input>      Auto-crop to the subject with padding
+  shadow <input>          Cutout + drop shadow on a new background
+  sticker <input>         Thick outline on transparent bg (WhatsApp / iMessage stickers)
+  outline <input>         Thin outline around the subject
+  studio-shot <input>     E-commerce preset: cutout + bg + shadow + aspect crop
+  compare <input>         Side-by-side before/after preview
   health                  Check the API is reachable
   --help, -h              Show this help
   --version, -v           Show version
@@ -62,6 +82,15 @@ EXAMPLES
 
   # Replace with a solid color, output as compact JPG:
   npx @useknockout/cli replace ./photo.jpg --bg-color "#007BFF" --format jpg
+
+  # Make a WhatsApp-style sticker:
+  npx @useknockout/cli sticker ./photo.jpg --stroke-width 24
+
+  # E-commerce product shot (square, white bg, shadow):
+  npx @useknockout/cli studio-shot ./photo.jpg --aspect 1:1
+
+  # Before/after preview for social media:
+  npx @useknockout/cli compare ./photo.jpg
 
 LINKS
   Docs:  https://github.com/useknockout/api
@@ -209,6 +238,203 @@ async function runHealth(globals: GlobalOpts): Promise<void> {
   process.stdout.write(JSON.stringify(info, null, 2) + "\n");
 }
 
+async function runMask(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("mask: missing <input>. Usage: useknockout mask <input>");
+  const format = (values.format as "png" | "webp") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-mask");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ generating mask for ${input}`);
+  const start = Date.now();
+  const buf = await client.mask({ file: input, format });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runSmartCrop(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      padding: { type: "string", default: "24" },
+      opaque: { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("smart-crop: missing <input>");
+  const transparent = !values.opaque;
+  const format = (values.format as "png" | "webp" | "jpg") ?? (transparent ? "png" : "jpg");
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-crop");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ smart-cropping ${input} (padding=${values.padding}, transparent=${transparent})`);
+  const start = Date.now();
+  const buf = await client.smartCrop({
+    file: input,
+    padding: parseInt(String(values.padding), 10),
+    transparent,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runShadow(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      "bg-color": { type: "string" },
+      "bg-url": { type: "string" },
+      "shadow-color": { type: "string" },
+      "shadow-offset-x": { type: "string" },
+      "shadow-offset-y": { type: "string" },
+      "shadow-blur": { type: "string" },
+      "shadow-opacity": { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("shadow: missing <input>");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-shadow");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ shadow ${input}`);
+  const start = Date.now();
+  const buf = await client.shadow({
+    file: input,
+    bgColor: values["bg-color"] as string | undefined,
+    bgUrl: values["bg-url"] as string | undefined,
+    shadowColor: values["shadow-color"] as string | undefined,
+    shadowOffsetX: values["shadow-offset-x"] ? parseInt(String(values["shadow-offset-x"]), 10) : undefined,
+    shadowOffsetY: values["shadow-offset-y"] ? parseInt(String(values["shadow-offset-y"]), 10) : undefined,
+    shadowBlur: values["shadow-blur"] ? parseInt(String(values["shadow-blur"]), 10) : undefined,
+    shadowOpacity: values["shadow-opacity"] ? parseFloat(String(values["shadow-opacity"])) : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runSticker(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      "stroke-color": { type: "string" },
+      "stroke-width": { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("sticker: missing <input>");
+  const format = (values.format as "png" | "webp") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-sticker");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ sticker ${input}`);
+  const start = Date.now();
+  const buf = await client.sticker({
+    file: input,
+    strokeColor: values["stroke-color"] as string | undefined,
+    strokeWidth: values["stroke-width"] ? parseInt(String(values["stroke-width"]), 10) : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runOutline(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      "outline-color": { type: "string" },
+      "outline-width": { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("outline: missing <input>");
+  const format = (values.format as "png" | "webp") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-outline");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ outline ${input}`);
+  const start = Date.now();
+  const buf = await client.outline({
+    file: input,
+    outlineColor: values["outline-color"] as string | undefined,
+    outlineWidth: values["outline-width"] ? parseInt(String(values["outline-width"]), 10) : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "jpg" },
+      "bg-color": { type: "string" },
+      aspect: { type: "string" },
+      padding: { type: "string" },
+      "no-shadow": { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("studio-shot: missing <input>");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "jpg";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-studio");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ studio-shot ${input}`);
+  const start = Date.now();
+  const buf = await client.studioShot({
+    file: input,
+    bgColor: values["bg-color"] as string | undefined,
+    aspect: values.aspect as string | undefined,
+    padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
+    shadow: !values["no-shadow"],
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
+async function runCompare(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("compare: missing <input>");
+  const format = (values.format as "png" | "webp") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-compare");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ compare ${input}`);
+  const start = Date.now();
+  const buf = await client.compare({ file: input, format });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
 function parseGlobals(args: string[]): { globals: GlobalOpts; remaining: string[] } {
   const remaining: string[] = [];
   let token: string | undefined;
@@ -256,6 +482,27 @@ async function main(): Promise<void> {
         break;
       case "batch":
         await runBatch(remaining, globals);
+        break;
+      case "mask":
+        await runMask(remaining, globals);
+        break;
+      case "smart-crop":
+        await runSmartCrop(remaining, globals);
+        break;
+      case "shadow":
+        await runShadow(remaining, globals);
+        break;
+      case "sticker":
+        await runSticker(remaining, globals);
+        break;
+      case "outline":
+        await runOutline(remaining, globals);
+        break;
+      case "studio-shot":
+        await runStudioShot(remaining, globals);
+        break;
+      case "compare":
+        await runCompare(remaining, globals);
         break;
       case "health":
         await runHealth(globals);
