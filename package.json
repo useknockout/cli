@@ -1,6 +1,6 @@
 {
   "name": "@useknockout/cli",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "CLI for useknockout — remove backgrounds, replace backgrounds, batch process. No install required via npx.",
   "keywords": [
     "background-removal",
