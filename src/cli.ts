@@ -14,7 +14,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.0.2";
+const VERSION = "0.0.3";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
 type Command =

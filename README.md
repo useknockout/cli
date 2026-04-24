@@ -73,6 +73,84 @@ Shell globs work: `useknockout batch *.jpg --out-dir ./out` (up to 10 files).
 
 Per-file results named `<original>-nobg.<format>`. Exit code `1` if any file failed.
 
+### `mask` — return just the alpha mask as a B/W PNG
+
+```bash
+useknockout mask photo.jpg
+# → photo-mask.png (grayscale: 0 = bg, 255 = subject)
+```
+
+### `smart-crop` — auto-crop to subject's bounding box
+
+```bash
+useknockout smart-crop photo.jpg --padding 32
+useknockout smart-crop photo.jpg --padding 0 --opaque --format jpg
+```
+
+| Option | Description |
+|---|---|
+| `--padding <px>` | Padding around the subject. Default `24`. |
+| `--opaque` | Keep the original background (crop only). Default is transparent cutout. |
+| `--out`, `--format` | Same as other commands. |
+
+### `shadow` — drop shadow on a new background
+
+```bash
+useknockout shadow photo.jpg --bg-color "#F3F4F6"
+useknockout shadow photo.jpg --bg-url https://example.com/backdrop.jpg --shadow-blur 20
+```
+
+| Option | Description |
+|---|---|
+| `--bg-color <hex>`, `--bg-url <url>` | New background (color or remote image). |
+| `--shadow-color`, `--shadow-offset-x`, `--shadow-offset-y`, `--shadow-blur`, `--shadow-opacity` | Configure the shadow. |
+
+### `sticker` — WhatsApp / iMessage sticker style
+
+```bash
+useknockout sticker photo.jpg --stroke-width 24
+useknockout sticker photo.jpg --stroke-color "#000000" --stroke-width 12
+```
+
+| Option | Description |
+|---|---|
+| `--stroke-color <hex>` | Outline color. Default `#FFFFFF`. |
+| `--stroke-width <px>` | Outline width. Default `20`. |
+
+### `outline` — thin outline on transparent background
+
+```bash
+useknockout outline photo.jpg --outline-color "#000000" --outline-width 4
+```
+
+| Option | Description |
+|---|---|
+| `--outline-color <hex>` | Line color. Default `#000000`. |
+| `--outline-width <px>` | Line width. Default `4`. |
+
+### `studio-shot` — e-commerce preset (cutout + bg + shadow + aspect)
+
+```bash
+useknockout studio-shot photo.jpg --aspect 1:1
+useknockout studio-shot photo.jpg --aspect 4:5 --bg-color "#ffffff" --no-shadow --format jpg
+```
+
+| Option | Description |
+|---|---|
+| `--aspect <W:H>` | Output aspect ratio. Default `1:1`. |
+| `--bg-color <hex>` | Canvas color. Default `#FFFFFF`. |
+| `--padding <px>` | Padding around subject. Default `48`. |
+| `--no-shadow` | Disable the default drop shadow. |
+
+### `compare` — side-by-side before/after
+
+```bash
+useknockout compare photo.jpg
+# → photo-compare.png (original | transparent cutout on checkerboard)
+```
+
+Useful for marketing screenshots and social media.
+
 ### `health` — check the API
 
 ```bash
