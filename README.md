@@ -1,10 +1,32 @@
-# @useknockout/cli
+<div align="center">
 
-> CLI for [useknockout](https://github.com/useknockout/api) — remove backgrounds, replace backgrounds, batch process.
-> **No install required** — run directly with `npx`.
+  # 🥊 @useknockout/cli
+
+  **Zero-install CLI for [useknockout](https://github.com/useknockout/api) — state-of-the-art background removal, right from your terminal.**
+
+  [![MIT License](https://img.shields.io/badge/license-MIT-3da639)](./LICENSE)
+  [![npm version](https://img.shields.io/npm/v/@useknockout/cli?color=cb3837)](https://www.npmjs.com/package/@useknockout/cli)
+  [![npm downloads](https://img.shields.io/npm/dm/@useknockout/cli?color=cb3837)](https://www.npmjs.com/package/@useknockout/cli)
+  [![GitHub stars](https://img.shields.io/github/stars/useknockout/cli?style=social)](https://github.com/useknockout/cli)
+  [![Node](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+  [![Runs via npx](https://img.shields.io/badge/runs%20via-npx-ff7a00)](https://docs.npmjs.com/cli/v10/commands/npx)
+
+  [**Try in 10 seconds**](#try-it-in-10-seconds) · [**Commands**](#commands) · [**Global options**](#global-options) · [**API repo**](https://github.com/useknockout/api)
+
+  <br/>
+
+  <img src="https://raw.githubusercontent.com/useknockout/api/main/docs/hero.png" alt="useknockout before/after — background removal demo" width="800"/>
+
+  <br/>
+
+  *`npx @useknockout/cli remove cat.jpg` — done.*
+
+</div>
+
+---
 
 - **Zero-setup** — `npx @useknockout/cli remove cat.jpg`
-- **Full feature coverage** — remove, replace, batch, health
+- **Full feature coverage** — remove, replace, batch, mask, smart-crop, shadow, sticker, outline, studio-shot, compare
 - **Pipe-friendly** — exit codes, `--quiet`, JSON for health
 - **MIT licensed**
 
