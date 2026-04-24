@@ -1,0 +1,55 @@
+{
+  "name": "@useknockout/cli",
+  "version": "0.0.1",
+  "description": "CLI for useknockout — remove backgrounds, replace backgrounds, batch process. No install required via npx.",
+  "keywords": [
+    "background-removal",
+    "remove-background",
+    "cli",
+    "command-line",
+    "birefnet",
+    "ai",
+    "image-processing",
+    "useknockout"
+  ],
+  "homepage": "https://github.com/useknockout/cli",
+  "bugs": {
+    "url": "https://github.com/useknockout/cli/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/useknockout/cli.git"
+  },
+  "license": "MIT",
+  "author": "useknockout",
+  "type": "module",
+  "bin": {
+    "useknockout": "./dist/cli.cjs",
+    "knockout": "./dist/cli.cjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "dev": "node --loader tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@useknockout/node": "^0.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
