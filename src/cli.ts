@@ -14,7 +14,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.0.4";
+const VERSION = "0.0.5";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
 type Command =
@@ -28,6 +28,10 @@ type Command =
   | "outline"
   | "studio-shot"
   | "compare"
+  | "headshot"
+  | "preview"
+  | "estimate"
+  | "stats"
   | "health"
   | "help"
   | "version";
@@ -56,6 +60,10 @@ COMMANDS
   outline <input>         Thin outline around the subject
   studio-shot <input>     E-commerce preset: cutout + bg + shadow + aspect crop
   compare <input>         Side-by-side before/after preview
+  headshot <input>        LinkedIn-ready portrait (4:5, color or blurred bg)
+  preview <input>         Fast low-res cutout (~80ms warm, no refinement)
+  estimate <endpoint>     Predict latency + cost (--width, --height required)
+  stats                   Public usage counter (total + today + 7-day)
   health                  Check the API is reachable
   --help, -h              Show this help
   --version, -v           Show version
@@ -435,6 +443,105 @@ async function runCompare(args: string[], globals: GlobalOpts): Promise<void> {
   log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
 }
 
+async function runHeadshot(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "jpg" },
+      "bg-color": { type: "string" },
+      "bg-blur": { type: "boolean", default: false },
+      "blur-radius": { type: "string" },
+      aspect: { type: "string" },
+      padding: { type: "string" },
+      "head-top-ratio": { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("headshot: missing <input>");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "jpg";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-headshot");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ headshot ${input}`);
+  const start = Date.now();
+  const buf = await client.headshot({
+    file: input,
+    bgColor: values["bg-color"] as string | undefined,
+    bgBlur: values["bg-blur"] as boolean | undefined,
+    blurRadius: values["blur-radius"] ? parseInt(String(values["blur-radius"]), 10) : undefined,
+    aspect: values.aspect as string | undefined,
+    padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
+    headTopRatio: values["head-top-ratio"]
+      ? parseFloat(String(values["head-top-ratio"]))
+      : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(
+    globals.quiet,
+    `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`
+  );
+}
+
+async function runPreview(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      "max-dim": { type: "string", default: "512" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("preview: missing <input>");
+  const format = (values.format as "png" | "webp") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-preview");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ preview ${input} (max_dim=${values["max-dim"]})`);
+  const start = Date.now();
+  const buf = await client.preview({
+    file: input,
+    maxDim: parseInt(String(values["max-dim"]), 10),
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(
+    globals.quiet,
+    `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`
+  );
+}
+
+async function runEstimate(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      width: { type: "string" },
+      height: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const endpoint = positionals[0];
+  if (!endpoint) {
+    fail("estimate: missing <endpoint>. Usage: useknockout estimate remove --width 1024 --height 1024");
+  }
+  const w = values.width ? parseInt(String(values.width), 10) : NaN;
+  const h = values.height ? parseInt(String(values.height), 10) : NaN;
+  if (!Number.isFinite(w) || !Number.isFinite(h)) {
+    fail("estimate: --width and --height are required (in pixels)");
+  }
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  const result = await client.estimate({ endpoint, width: w, height: h });
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
+async function runStats(globals: GlobalOpts): Promise<void> {
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  const result = await client.stats();
+  process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+}
+
 function parseGlobals(args: string[]): { globals: GlobalOpts; remaining: string[] } {
   const remaining: string[] = [];
   let token: string | undefined;
@@ -503,6 +610,18 @@ async function main(): Promise<void> {
         break;
       case "compare":
         await runCompare(remaining, globals);
+        break;
+      case "headshot":
+        await runHeadshot(remaining, globals);
+        break;
+      case "preview":
+        await runPreview(remaining, globals);
+        break;
+      case "estimate":
+        await runEstimate(remaining, globals);
+        break;
+      case "stats":
+        await runStats(globals);
         break;
       case "health":
         await runHealth(globals);
