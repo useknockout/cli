@@ -14,7 +14,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.0.5";
+const VERSION = "0.0.6";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
 type Command =
@@ -30,6 +30,8 @@ type Command =
   | "compare"
   | "headshot"
   | "preview"
+  | "upscale"
+  | "face-restore"
   | "estimate"
   | "stats"
   | "health"
@@ -62,6 +64,8 @@ COMMANDS
   compare <input>         Side-by-side before/after preview
   headshot <input>        LinkedIn-ready portrait (4:5, color or blurred bg)
   preview <input>         Fast low-res cutout (~80ms warm, no refinement)
+  upscale <input>         Real-ESRGAN x2/x4 super-resolution
+  face-restore <input>    GFPGAN portrait restoration
   estimate <endpoint>     Predict latency + cost (--width, --height required)
   stats                   Public usage counter (total + today + 7-day)
   health                  Check the API is reachable
@@ -542,6 +546,69 @@ async function runStats(globals: GlobalOpts): Promise<void> {
   process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
+async function runUpscale(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      scale: { type: "string", default: "4" },
+      "face-enhance": { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("upscale: missing <input>");
+  const scale = parseInt(String(values.scale), 10);
+  if (scale !== 2 && scale !== 4) fail("upscale: --scale must be 2 or 4");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "png";
+  const outPath =
+    (values.out as string | undefined) ?? defaultOutPath(input, format, `-${scale}x`);
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl, timeoutMs: 180_000 });
+  log(globals.quiet, `→ upscaling ${input} (scale=${scale}x, face_enhance=${values["face-enhance"]})`);
+  const start = Date.now();
+  const buf = await client.upscale({
+    file: input,
+    scale: scale as 2 | 4,
+    faceEnhance: values["face-enhance"] as boolean | undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(
+    globals.quiet,
+    `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`
+  );
+}
+
+async function runFaceRestore(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      "only-center-face": { type: "boolean", default: false },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("face-restore: missing <input>");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-restored");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl, timeoutMs: 180_000 });
+  log(globals.quiet, `→ face-restore ${input}`);
+  const start = Date.now();
+  const buf = await client.faceRestore({
+    file: input,
+    onlyCenterFace: values["only-center-face"] as boolean | undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(
+    globals.quiet,
+    `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`
+  );
+}
+
 function parseGlobals(args: string[]): { globals: GlobalOpts; remaining: string[] } {
   const remaining: string[] = [];
   let token: string | undefined;
@@ -616,6 +683,12 @@ async function main(): Promise<void> {
         break;
       case "preview":
         await runPreview(remaining, globals);
+        break;
+      case "upscale":
+        await runUpscale(remaining, globals);
+        break;
+      case "face-restore":
+        await runFaceRestore(remaining, globals);
         break;
       case "estimate":
         await runEstimate(remaining, globals);

@@ -1,6 +1,6 @@
 {
   "name": "@useknockout/cli",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "CLI for useknockout — remove backgrounds, replace backgrounds, batch process. No install required via npx.",
   "keywords": [
     "background-removal",
@@ -42,7 +42,7 @@
     "dev": "node --loader tsx src/cli.ts"
   },
   "dependencies": {
-    "@useknockout/node": "^0.0.7"
+    "@useknockout/node": "^0.0.8"
   },
   "devDependencies": {
     "@types/node": "^22.7.0",
