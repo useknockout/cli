@@ -26,7 +26,7 @@
 ---
 
 - **Zero-setup** — `npx @useknockout/cli remove cat.jpg`
-- **Full feature coverage** — remove, replace, batch, mask, smart-crop, shadow, sticker, outline, studio-shot, compare
+- **Full feature coverage** — remove, replace, batch, mask, smart-crop, shadow, sticker, outline, studio-shot, compare, headshot, preview, estimate, stats, upscale, face-restore
 - **Pipe-friendly** — exit codes, `--quiet`, JSON for health
 - **MIT licensed**
 
@@ -172,6 +172,74 @@ useknockout compare photo.jpg
 ```
 
 Useful for marketing screenshots and social media.
+
+### `headshot` — studio-quality professional headshot (v0.4.0)
+
+```bash
+useknockout headshot photo.jpg --bg-color "#f5f5f5" --crop bust
+useknockout headshot photo.jpg --crop head --no-shadow --format jpg
+```
+
+| Option | Description |
+|---|---|
+| `--bg-color <hex>` | Studio backdrop. Default `#f5f5f5`. |
+| `--crop <mode>` | `bust`, `head`, or `full`. Default `bust`. |
+| `--no-shadow` | Disable soft drop shadow. |
+
+### `preview` — fast low-res preview (v0.4.0)
+
+```bash
+useknockout preview photo.jpg --max-size 512
+useknockout preview photo.jpg --watermark
+```
+
+| Option | Description |
+|---|---|
+| `--max-size <px>` | Max edge length. Default `512`. |
+| `--watermark` | Add `useknockout` watermark. |
+
+Returns ~1.5s for thumbnail UIs before triggering full-res requests.
+
+### `estimate` — estimate processing time + size (v0.4.0)
+
+```bash
+useknockout estimate --width 2048 --height 1536 --endpoint remove
+# {"estimated_seconds": 2.4, "estimated_output_kb": 1180, "warm": true}
+```
+
+No image upload — pure JSON metadata call.
+
+### `stats` — public API usage stats (v0.4.0)
+
+```bash
+useknockout stats
+# {"total": 12340, "last_24h": 312, "last_7d": [...]}
+```
+
+No auth required.
+
+### `upscale` — Real-ESRGAN super-resolution (v0.5.0)
+
+```bash
+useknockout upscale small.jpg --scale 4
+useknockout upscale small.jpg --scale 2 --format webp
+```
+
+| Option | Description |
+|---|---|
+| `--scale <n>` | `2` or `4`. Default `4`. |
+| `--out`, `--format` | Same as other commands. |
+
+Outputs 2x or 4x larger image with AI-restored detail. Tile-based — handles big inputs without OOM.
+
+### `face-restore` — GFPGAN face restoration (v0.5.0)
+
+```bash
+useknockout face-restore blurry-portrait.jpg
+useknockout face-restore old-photo.jpg --out restored.png
+```
+
+Detects faces, restores blurred/compressed/damaged ones while preserving identity. Background also upscaled. Multi-face safe.
 
 ### `health` — check the API
 
