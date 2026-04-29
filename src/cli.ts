@@ -64,7 +64,7 @@ COMMANDS
   compare <input>         Side-by-side before/after preview
   headshot <input>        LinkedIn-ready portrait (4:5, color or blurred bg)
   preview <input>         Fast low-res cutout (~80ms warm, no refinement)
-  upscale <input>         Real-ESRGAN x2/x4 super-resolution
+  upscale <input>         Swin2SR / Real-ESRGAN x2/x4 super-resolution
   face-restore <input>    GFPGAN portrait restoration
   estimate <endpoint>     Predict latency + cost (--width, --height required)
   stats                   Public usage counter (total + today + 7-day)
@@ -553,6 +553,7 @@ async function runUpscale(args: string[], globals: GlobalOpts): Promise<void> {
       out: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "png" },
       scale: { type: "string", default: "4" },
+      model: { type: "string", default: "swin2sr" },
       "face-enhance": { type: "boolean", default: false },
     },
     allowPositionals: true,
@@ -561,15 +562,20 @@ async function runUpscale(args: string[], globals: GlobalOpts): Promise<void> {
   if (!input) fail("upscale: missing <input>");
   const scale = parseInt(String(values.scale), 10);
   if (scale !== 2 && scale !== 4) fail("upscale: --scale must be 2 or 4");
+  const model = String(values.model);
+  if (model !== "swin2sr" && model !== "realesrgan") {
+    fail("upscale: --model must be 'swin2sr' or 'realesrgan'");
+  }
   const format = (values.format as "png" | "webp" | "jpg") ?? "png";
   const outPath =
     (values.out as string | undefined) ?? defaultOutPath(input, format, `-${scale}x`);
   const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl, timeoutMs: 180_000 });
-  log(globals.quiet, `→ upscaling ${input} (scale=${scale}x, face_enhance=${values["face-enhance"]})`);
+  log(globals.quiet, `→ upscaling ${input} (model=${model}, scale=${scale}x, face_enhance=${values["face-enhance"]})`);
   const start = Date.now();
   const buf = await client.upscale({
     file: input,
     scale: scale as 2 | 4,
+    model: model as "swin2sr" | "realesrgan",
     faceEnhance: values["face-enhance"] as boolean | undefined,
     format,
   });

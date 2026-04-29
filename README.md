@@ -218,19 +218,20 @@ useknockout stats
 
 No auth required.
 
-### `upscale` — Real-ESRGAN super-resolution (v0.5.0)
+### `upscale` — Swin2SR / Real-ESRGAN super-resolution (v0.6.0)
 
 ```bash
 useknockout upscale small.jpg --scale 4
-useknockout upscale small.jpg --scale 2 --format webp
+useknockout upscale small.jpg --scale 2 --model realesrgan
 ```
 
 | Option | Description |
 |---|---|
 | `--scale <n>` | `2` or `4`. Default `4`. |
+| `--model <name>` | `swin2sr` (default, sharp on real photos) or `realesrgan` (legacy, better on anime / illustrations). |
 | `--out`, `--format` | Same as other commands. |
 
-Outputs 2x or 4x larger image with AI-restored detail. Tile-based — handles big inputs without OOM.
+**v0.6.0** — default switched to **Swin2SR** (SwinV2 Transformer): sharper detail and natural texture on real photos. Pass `--model realesrgan` for the legacy backend.
 
 ### `face-restore` — GFPGAN face restoration (v0.5.0)
 
