@@ -14,7 +14,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.1.1";
+const VERSION = "0.2.0";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
 type Command =
@@ -34,6 +34,7 @@ type Command =
   | "face-restore"
   | "colorize"
   | "silhouette"
+  | "inpaint"
   | "estimate"
   | "stats"
   | "health"
@@ -70,6 +71,7 @@ COMMANDS
   face-restore <input>    GFPGAN portrait restoration
   colorize <input>        DDColor — predict color from a B&W or grayscale photo
   silhouette <input>      Two-tone silhouette portrait (Apple Music / Spotify avatar style)
+  inpaint <input>         LaMa — erase a region. Auto-subject by default, or pass --mask / --bbox
   estimate <endpoint>     Predict latency + cost (--width, --height required)
   stats                   Public usage counter (total + today + 7-day)
   health                  Check the API is reachable
@@ -590,6 +592,50 @@ async function runUpscale(args: string[], globals: GlobalOpts): Promise<void> {
   );
 }
 
+async function runInpaint(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+      mask: { type: "string" },
+      bbox: { type: "string" }, // "x,y,w,h"
+      dilation: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("inpaint: missing <input>");
+  const format = (values.format as "png" | "webp" | "jpg") ?? "png";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-inpaint");
+
+  let bbox: { x: number; y: number; w: number; h: number } | undefined;
+  if (values.bbox) {
+    const parts = String(values.bbox).split(",").map((s) => parseInt(s.trim(), 10));
+    if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
+      fail("inpaint: --bbox must be 'x,y,w,h' integers (e.g. '100,100,300,400')");
+    }
+    bbox = { x: parts[0]!, y: parts[1]!, w: parts[2]!, h: parts[3]! };
+  }
+
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl, timeoutMs: 180_000 });
+  const mode = values.mask ? "mask" : bbox ? "bbox" : "auto-subject";
+  log(globals.quiet, `→ inpaint ${input} (mode=${mode})`);
+  const start = Date.now();
+  const buf = await client.inpaint({
+    file: input,
+    mask: values.mask ? String(values.mask) : undefined,
+    bbox,
+    dilation: values.dilation ? parseInt(String(values.dilation), 10) : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(
+    globals.quiet,
+    `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`
+  );
+}
+
 async function runSilhouette(args: string[], globals: GlobalOpts): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
@@ -760,6 +806,9 @@ async function main(): Promise<void> {
         break;
       case "silhouette":
         await runSilhouette(remaining, globals);
+        break;
+      case "inpaint":
+        await runInpaint(remaining, globals);
         break;
       case "estimate":
         await runEstimate(remaining, globals);
