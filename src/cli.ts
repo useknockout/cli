@@ -410,12 +410,16 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
       aspect: { type: "string" },
       padding: { type: "string" },
       "no-shadow": { type: "boolean", default: false },
+      transparent: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
   const input = positionals[0];
   if (!input) fail("studio-shot: missing <input>");
-  const format = (values.format as "png" | "webp" | "jpg") ?? "jpg";
+  const transparent = Boolean(values.transparent);
+  const requested = (values.format as "png" | "webp" | "jpg") ?? "jpg";
+  // jpg can't carry alpha — the API coerces to png; mirror that for the output filename
+  const format = transparent && requested === "jpg" ? "png" : requested;
   const outPath = (values.out as string | undefined) ?? defaultOutPath(input, format, "-studio");
   const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
   log(globals.quiet, `→ studio-shot ${input}`);
@@ -426,6 +430,7 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
     aspect: values.aspect as string | undefined,
     padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
     shadow: !values["no-shadow"],
+    transparent,
     format,
   });
   await writeFile(outPath, buf);

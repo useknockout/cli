@@ -155,6 +155,7 @@ useknockout outline photo.jpg --outline-color "#000000" --outline-width 4
 ```bash
 useknockout studio-shot photo.jpg --aspect 1:1
 useknockout studio-shot photo.jpg --aspect 4:5 --bg-color "#ffffff" --no-shadow --format jpg
+useknockout studio-shot photo.jpg --transparent          # transparent bg → PNG
 ```
 
 | Option | Description |
@@ -163,6 +164,7 @@ useknockout studio-shot photo.jpg --aspect 4:5 --bg-color "#ffffff" --no-shadow 
 | `--bg-color <hex>` | Canvas color. Default `#FFFFFF`. |
 | `--padding <px>` | Padding around subject. Default `48`. |
 | `--no-shadow` | Disable the default drop shadow. |
+| `--transparent` | Keep a transparent background. Ignores `--bg-color` and shadow; output is PNG. |
 
 ### `compare` — side-by-side before/after
 
