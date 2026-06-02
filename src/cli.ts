@@ -14,11 +14,12 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { Knockout, KnockoutError } from "@useknockout/node";
 
-const VERSION = "0.2.0";
+const VERSION = "0.4.0";
 const DEFAULT_TOKEN = "kno_public_beta_4d7e9f1a3c5b2e8d6a9f7c1b3e5d8a2f";
 
 type Command =
   | "remove"
+  | "remove-url"
   | "replace"
   | "batch"
   | "mask"
@@ -56,8 +57,9 @@ USAGE
 
 COMMANDS
   remove <input>          Remove background from one image → transparent PNG/WebP
+  remove-url <url>        Remove background from a remote image URL
   replace <input>         Remove background + composite onto a new background
-  batch <file1> <file2>…  Process up to 10 images in one call
+  batch <file1> <file2>…  Process up to 10 images in one call (--url to pass URLs)
   mask <input>            Return just the alpha mask as a B/W PNG
   smart-crop <input>      Auto-crop to the subject with padding
   shadow <input>          Cutout + drop shadow on a new background
@@ -91,8 +93,13 @@ REPLACE
   useknockout replace cat.jpg --bg-color "#FF5733" --out out.jpg --format jpg
   useknockout replace cat.jpg --bg-url https://example.com/beach.jpg --out out.png
 
-BATCH (up to 10 files)
+BATCH (up to 10 files or URLs)
   useknockout batch a.jpg b.jpg c.jpg --out-dir ./cutouts --format png
+  useknockout batch --url https://ex.com/a.jpg https://ex.com/b.jpg --out-dir ./cutouts
+  useknockout remove-url https://example.com/cat.jpg --out cat.png
+
+FACE-RESTORE
+  useknockout face-restore portrait.jpg --bg-enhance   # also upscale the background 2x
 
 EXAMPLES
   # Try it in 10 seconds (no install required):
@@ -166,6 +173,39 @@ async function runRemove(args: string[], globals: GlobalOpts): Promise<void> {
   log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${elapsed}s)`);
 }
 
+async function runRemoveUrl(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "png" },
+    },
+    allowPositionals: true,
+  });
+
+  const url = positionals[0];
+  if (!url) fail("remove-url: missing <url>. Usage: useknockout remove-url <url>");
+
+  const format = (values.format as "png" | "webp") ?? "png";
+  let stem = "remote-image";
+  try {
+    stem = basename(new URL(url).pathname) || stem;
+  } catch {
+    fail(`remove-url: invalid URL: ${url}`);
+  }
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(stem, format);
+
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ removing background from ${url} (format=${format})`);
+
+  const start = Date.now();
+  const buf = await client.removeUrl({ url, format });
+  const elapsed = ((Date.now() - start) / 1000).toFixed(2);
+
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${elapsed}s)`);
+}
+
 async function runReplace(args: string[], globals: GlobalOpts): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
@@ -215,35 +255,46 @@ async function runBatch(args: string[], globals: GlobalOpts): Promise<void> {
     options: {
       "out-dir": { type: "string" },
       format: { type: "string", short: "f", default: "png" },
+      url: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
 
-  const files = positionals.filter(Boolean);
-  if (files.length === 0) fail("batch: missing files. Usage: useknockout batch a.jpg b.jpg …");
-  if (files.length > 10) fail(`batch: max 10 files per call (got ${files.length})`);
+  const items = positionals.filter(Boolean);
+  const isUrl = Boolean(values.url);
+  const noun = isUrl ? "URLs" : "files";
+  if (items.length === 0) {
+    fail(`batch: missing ${noun}. Usage: useknockout batch a.jpg b.jpg …  (or --url u1 u2 …)`);
+  }
+  if (items.length > 10) fail(`batch: max 10 ${noun} per call (got ${items.length})`);
 
   const format = (values.format as "png" | "webp") ?? "png";
   const outDir = resolve((values["out-dir"] as string | undefined) ?? process.cwd());
   await mkdir(outDir, { recursive: true });
 
   const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
-  log(globals.quiet, `→ processing ${files.length} file(s) → ${outDir}`);
+  log(globals.quiet, `→ processing ${items.length} ${isUrl ? "URL" : "file"}(s) → ${outDir}`);
 
   const start = Date.now();
-  const result = await client.removeBatch({ files, filenames: files.map((f) => basename(f)), format });
+  const result = isUrl
+    ? await client.removeBatchUrl({ urls: items, format })
+    : await client.removeBatch({ files: items, filenames: items.map((f) => basename(f)), format });
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
 
   let ok = 0;
+  let i = 0;
   for (const r of result.results) {
-    if (r.success && r.data_base64 && r.filename) {
-      const outName = basename(r.filename, extname(r.filename)) + `-nobg.${format}`;
+    i++;
+    if (r.success && r.data_base64) {
+      const fromUrl = r.url ? basename(new URL(r.url).pathname) : "";
+      const label = r.filename ?? (fromUrl || `image-${i}`);
+      const outName = basename(label, extname(label)) + `-nobg.${format}`;
       const outPath = join(outDir, outName);
       await writeFile(outPath, Buffer.from(r.data_base64, "base64"));
       ok++;
       log(globals.quiet, `  ✓ ${outPath} (${bytesHuman(r.size_bytes ?? 0)})`);
     } else {
-      log(globals.quiet, `  ✗ ${r.filename ?? "?"}: ${r.error ?? "failed"}`);
+      log(globals.quiet, `  ✗ ${r.filename ?? r.url ?? `image-${i}`}: ${r.error ?? "failed"}`);
     }
   }
   log(globals.quiet, `\n${ok}/${result.count} succeeded in ${elapsed}s`);
@@ -703,6 +754,7 @@ async function runFaceRestore(args: string[], globals: GlobalOpts): Promise<void
       out: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "png" },
       "only-center-face": { type: "boolean", default: false },
+      "bg-enhance": { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -716,6 +768,7 @@ async function runFaceRestore(args: string[], globals: GlobalOpts): Promise<void
   const buf = await client.faceRestore({
     file: input,
     onlyCenterFace: values["only-center-face"] as boolean | undefined,
+    bgEnhance: values["bg-enhance"] as boolean | undefined,
     format,
   });
   await writeFile(outPath, buf);
@@ -766,6 +819,9 @@ async function main(): Promise<void> {
     switch (command) {
       case "remove":
         await runRemove(remaining, globals);
+        break;
+      case "remove-url":
+        await runRemoveUrl(remaining, globals);
         break;
       case "replace":
         await runReplace(remaining, globals);
