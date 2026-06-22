@@ -114,6 +114,9 @@ EXAMPLES
   # E-commerce product shot (square, white bg, shadow):
   npx @useknockout/cli studio-shot ./photo.jpg --aspect 1:1
 
+  # Same, with a brightness + saturation lift for ecommerce-ready output:
+  npx @useknockout/cli studio-shot ./photo.jpg --aspect 1:1 --enhance
+
   # Before/after preview for social media:
   npx @useknockout/cli compare ./photo.jpg
 
@@ -462,6 +465,8 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
       padding: { type: "string" },
       "no-shadow": { type: "boolean", default: false },
       transparent: { type: "boolean", default: false },
+      enhance: { type: "boolean", default: false },
+      "enhance-strength": { type: "string" },
     },
     allowPositionals: true,
   });
@@ -482,6 +487,10 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
     padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
     shadow: !values["no-shadow"],
     transparent,
+    enhance: values.enhance ? true : undefined,
+    enhanceStrength: values["enhance-strength"]
+      ? parseFloat(String(values["enhance-strength"]))
+      : undefined,
     format,
   });
   await writeFile(outPath, buf);
