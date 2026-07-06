@@ -28,6 +28,7 @@ type Command =
   | "sticker"
   | "outline"
   | "studio-shot"
+  | "collage"
   | "compare"
   | "headshot"
   | "preview"
@@ -66,6 +67,7 @@ COMMANDS
   sticker <input>         Thick outline on transparent bg (WhatsApp / iMessage stickers)
   outline <input>         Thin outline around the subject
   studio-shot <input>     E-commerce preset: cutout + bg + shadow + aspect crop
+  collage <f1> <f2>…      2-9 photos laid out around a main image (paid; billed N units)
   compare <input>         Side-by-side before/after preview
   headshot <input>        LinkedIn-ready portrait (4:5, color or blurred bg)
   preview <input>         Fast low-res cutout (~80ms warm, no refinement)
@@ -497,6 +499,45 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
   log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
 }
 
+async function runCollage(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "jpg" },
+      "main-index": { type: "string" },
+      "main-position": { type: "string", default: "BR" },
+      "bg-color": { type: "string" },
+      aspect: { type: "string" },
+      padding: { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const items = positionals.filter(Boolean);
+  if (items.length < 2 || items.length > 9) {
+    fail(`collage: needs 2-9 images (got ${items.length}). Usage: useknockout collage main.jpg a.jpg b.jpg`);
+  }
+  const format = (values.format as "png" | "webp" | "jpg") ?? "jpg";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(items[0]!, format, "-collage");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ collage ${items.length} images (main=${values["main-index"] ?? 0} @ ${values["main-position"]})`);
+  const start = Date.now();
+  const buf = await client.collage({
+    files: items,
+    filenames: items.map((f) => basename(f)),
+    mainIndex: values["main-index"] ? parseInt(String(values["main-index"]), 10) : undefined,
+    mainPosition: values["main-position"] as
+      | "TL" | "T" | "TR" | "L" | "C" | "R" | "BL" | "B" | "BR"
+      | undefined,
+    bgColor: values["bg-color"] as string | undefined,
+    aspect: values.aspect as string | undefined,
+    padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
+    format,
+  });
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
+}
+
 async function runCompare(args: string[], globals: GlobalOpts): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
@@ -855,6 +896,9 @@ async function main(): Promise<void> {
         break;
       case "studio-shot":
         await runStudioShot(remaining, globals);
+        break;
+      case "collage":
+        await runCollage(remaining, globals);
         break;
       case "compare":
         await runCompare(remaining, globals);
