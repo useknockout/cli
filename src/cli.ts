@@ -29,6 +29,7 @@ type Command =
   | "outline"
   | "studio-shot"
   | "collage"
+  | "video"
   | "compare"
   | "headshot"
   | "preview"
@@ -68,6 +69,7 @@ COMMANDS
   outline <input>         Thin outline around the subject
   studio-shot <input>     E-commerce preset: cutout + bg + shadow + aspect crop
   collage <f1> <f2>…      2-9 photos laid out around a main image (paid; billed N units)
+  video <input>           Video background removal — ProRes 4444 alpha / webm / mp4 (paid; $0.05/s)
   compare <input>         Side-by-side before/after preview
   headshot <input>        LinkedIn-ready portrait (4:5, color or blurred bg)
   preview <input>         Fast low-res cutout (~80ms warm, no refinement)
@@ -538,6 +540,46 @@ async function runCollage(args: string[], globals: GlobalOpts): Promise<void> {
   log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(2)}s)`);
 }
 
+async function runVideo(args: string[], globals: GlobalOpts): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      out: { type: "string", short: "o" },
+      format: { type: "string", short: "f", default: "prores4444" },
+      "bg-color": { type: "string" },
+      smoothing: { type: "string" },
+      "poll-interval": { type: "string" },
+    },
+    allowPositionals: true,
+  });
+  const input = positionals[0];
+  if (!input) fail("video: missing <input>. Usage: useknockout video clip.mp4 [-f prores4444|webm|mp4]");
+  const format = (values.format as "prores4444" | "webm" | "mp4") ?? "prores4444";
+  const ext = format === "prores4444" ? "mov" : format === "webm" ? "webm" : "mp4";
+  const outPath = (values.out as string | undefined) ?? defaultOutPath(input, ext, "-nobg");
+  const client = new Knockout({ token: globals.token, baseUrl: globals.baseUrl });
+  log(globals.quiet, `→ video ${input} (${format}) — submitting…`);
+  const start = Date.now();
+  const job = await client.videoRemoveAndWait(
+    {
+      file: input!,
+      format,
+      bgColor: values["bg-color"] as string | undefined,
+      smoothing: values.smoothing ? parseInt(String(values.smoothing), 10) : undefined,
+    },
+    {
+      pollIntervalMs: values["poll-interval"] ? parseInt(String(values["poll-interval"]), 10) * 1000 : undefined,
+      onProgress: (j) => log(globals.quiet, `  … ${j.status} ${j.progress}%`),
+    }
+  );
+  if (!job.result_url) fail(`video: job ${job.job_id} finished without a result URL`);
+  const res = await fetch(job.result_url!);
+  if (!res.ok) fail(`video: could not download result (${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  await writeFile(outPath, buf);
+  log(globals.quiet, `✓ ${outPath} (${bytesHuman(buf.length)}, ${((Date.now() - start) / 1000).toFixed(1)}s)`);
+}
+
 async function runCompare(args: string[], globals: GlobalOpts): Promise<void> {
   const { values, positionals } = parseArgs({
     args,
@@ -899,6 +941,9 @@ async function main(): Promise<void> {
         break;
       case "collage":
         await runCollage(remaining, globals);
+        break;
+      case "video":
+        await runVideo(remaining, globals);
         break;
       case "compare":
         await runCompare(remaining, globals);
