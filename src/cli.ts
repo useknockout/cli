@@ -92,6 +92,7 @@ GLOBAL OPTIONS
 REMOVE
   useknockout remove cat.jpg
   useknockout remove cat.jpg --out cutout.png --format png
+  useknockout remove product.jpg --detect high_recall --decontaminate --edge hard
 
 REPLACE
   useknockout replace cat.jpg --bg-color "#FF5733" --out out.jpg --format jpg
@@ -159,6 +160,9 @@ async function runRemove(args: string[], globals: GlobalOpts): Promise<void> {
     options: {
       out: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "png" },
+      edge: { type: "string" },
+      detect: { type: "string" },
+      decontaminate: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -173,7 +177,13 @@ async function runRemove(args: string[], globals: GlobalOpts): Promise<void> {
   log(globals.quiet, `→ removing background from ${input} (format=${format})`);
 
   const start = Date.now();
-  const buf = await client.remove({ file: input, format });
+  const buf = await client.remove({
+    file: input,
+    format,
+    edge: values.edge as "soft" | "hard" | undefined,
+    detect: values.detect as "standard" | "high_recall" | undefined,
+    decontaminate: (values.decontaminate as boolean) || undefined,
+  });
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
 
   await writeFile(outPath, buf);
@@ -186,6 +196,9 @@ async function runRemoveUrl(args: string[], globals: GlobalOpts): Promise<void> 
     options: {
       out: { type: "string", short: "o" },
       format: { type: "string", short: "f", default: "png" },
+      edge: { type: "string" },
+      detect: { type: "string" },
+      decontaminate: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -206,7 +219,13 @@ async function runRemoveUrl(args: string[], globals: GlobalOpts): Promise<void> 
   log(globals.quiet, `→ removing background from ${url} (format=${format})`);
 
   const start = Date.now();
-  const buf = await client.removeUrl({ url, format });
+  const buf = await client.removeUrl({
+    url,
+    format,
+    edge: values.edge as "soft" | "hard" | undefined,
+    detect: values.detect as "standard" | "high_recall" | undefined,
+    decontaminate: (values.decontaminate as boolean) || undefined,
+  });
   const elapsed = ((Date.now() - start) / 1000).toFixed(2);
 
   await writeFile(outPath, buf);
@@ -343,6 +362,8 @@ async function runSmartCrop(args: string[], globals: GlobalOpts): Promise<void> 
       format: { type: "string", short: "f", default: "png" },
       padding: { type: "string", default: "24" },
       opaque: { type: "boolean", default: false },
+      detect: { type: "string" },
+      decontaminate: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -358,6 +379,8 @@ async function runSmartCrop(args: string[], globals: GlobalOpts): Promise<void> 
     file: input,
     padding: parseInt(String(values.padding), 10),
     transparent,
+    detect: values.detect as "standard" | "high_recall" | undefined,
+    decontaminate: (values.decontaminate as boolean) || undefined,
     format,
   });
   await writeFile(outPath, buf);
@@ -471,6 +494,8 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
       transparent: { type: "boolean", default: false },
       enhance: { type: "boolean", default: false },
       "enhance-strength": { type: "string" },
+      detect: { type: "string" },
+      decontaminate: { type: "boolean", default: false },
     },
     allowPositionals: true,
   });
@@ -491,6 +516,8 @@ async function runStudioShot(args: string[], globals: GlobalOpts): Promise<void>
     padding: values.padding ? parseInt(String(values.padding), 10) : undefined,
     shadow: !values["no-shadow"],
     transparent,
+    detect: values.detect as "standard" | "high_recall" | undefined,
+    decontaminate: (values.decontaminate as boolean) || undefined,
     enhance: values.enhance ? true : undefined,
     enhanceStrength: values["enhance-strength"]
       ? parseFloat(String(values["enhance-strength"]))
